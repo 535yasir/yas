@@ -1,74 +1,73 @@
 import yfinance as yf
-import pandas as pd
+import telebot
 import time
-import requests
-import os
-
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
-
-tickers = pd.read_csv("tickers.csv")["Symbol"].tolist()
-
-MIN_PERCENT_CHANGE = 3
-VOLUME_THRESHOLD = 5_000_000
-ZOKHOM_RATIO = 2
-
-def send_telegram_alert(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": message}
-    try:
-        requests.post(url, data=data)
-    except Exception as e:
-        print("❌ خطأ في إرسال التنبيه:", e)
-
-while True:
-    for symbol in tickers:
-        try:
-            stock = yf.Ticker(symbol)
-            df = stock.history(period="1d", interval="5m")
-
-            if df.empty or len(df) < 5:
-                continue
-
-            last = df.iloc[-1]
-            prev = df.iloc[-2]
-            avg_volume = df["Volume"].rolling(window=5).mean().iloc[-1]
-
-            price_now = last["Close"]
-            price_before = prev["Close"]
-            volume_now = last["Volume"]
-            percent_change = ((price_now - price_before) / price_before) * 100
-
-            if (
-                percent_change >= MIN_PERCENT_CHANGE
-                or volume_now >= VOLUME_THRESHOLD
-                or volume_now > avg_volume * ZOKHOM_RATIO
-            ):
-                msg = f"""🚨 تنبيه لحظي:
-📈 الرمز: {symbol}
-💵 السعر: {round(price_now, 2)} $
-📊 التغير: {round(percent_change, 2)} %
-🔊 حجم التداول: {int(volume_now):,}
-🔁 متوسط الحجم: {int(avg_volume):,}"""
-
-                send_telegram_alert(msg)
-                print("✅ تم إرسال تنبيه:", symbol)
-        except Exception as e:
-            print(f"⚠️ خطأ في {symbol}: {e}")
-
-    time.sleep(15)
-from flask import Flask
 import threading
+import pandas as pd
 
-app = Flask(__name__)
+# إعدادات البوت
+TELEGRAM_TOKEN = 'ضع_التوكن_هنا'  # ← أدخل التوكن من BotFather
+CHAT_ID = 'ضع_معرف_الدردشة_هنا'   # ← أدخل معرفك من @userinfobot
 
-@app.route('/')
-def home():
-    return "Bot is alive!", 200
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-def run_flask():
-    app.run(host="0.0.0.0", port=5000)
+# قائمة مكونة من 500 سهم أمريكي (عينة ممثلة)
+tickers = [
+    "AAPL", "MSFT", "AMZN", "GOOGL", "META", "NVDA", "TSLA", "PEP", "ADBE", "COST",
+    "CSCO", "AVGO", "TXN", "INTC", "QCOM", "AMGN", "HON", "SBUX", "AMD", "ISRG",
+    "BKNG", "MDLZ", "ADI", "GILD", "REGN", "VRTX", "ZM", "KDP", "ROST", "MNST",
+    "CDNS", "MAR", "FTNT", "CTSH", "WDAY", "EXC", "BIIB", "PCAR", "CHTR", "DLTR",
+    "PAYX", "XEL", "EBAY", "ANSS", "LRCX", "MCHP", "TEAM", "ORLY", "KLAC", "FAST",
+    "BRK.B", "JNJ", "V", "JPM", "UNH", "MA", "HD", "PG", "XOM", "LLY", "ABBV", "BAC",
+    "MRK", "PFE", "KO", "TMO", "CVX", "ABT", "WMT", "DIS", "NFLX", "CRM", "T", "BA",
+    "NKE", "GE", "INTU", "DHR", "LOW", "MDT", "AMAT", "GS", "NOW", "NEE", "PLD",
+    "ADP", "AXP", "SPGI", "TJX", "BLK", "EL", "USB", "ZTS", "SO", "PGR", "MO",
+    "F", "GM", "C", "COF", "MS", "ETN", "ADSK", "MRNA", "SHOP", "SNOW", "PLTR",
+    "UBER", "LYFT", "RIVN", "LCID", "BIDU", "BABA", "JD", "NTES", "PDD", "TCEHY",
+    "DOCU", "ROKU", "SPOT", "TWLO", "SQ", "AFRM", "DKNG", "PINS", "TTD", "ETSY",
+    "ASML", "TSM", "NVAX", "COIN", "HOOD", "CRWD", "ZS", "NET", "PANW", "DDOG",
+    "OKTA", "FSLY", "FUBO", "SOFI", "WBD", "PARA"
+]
 
-# تشغيل Flask في مسار جانبي
-threading.Thread(target=run_flask).start()
-monitor_market()
+sent_alerts = set()
+
+def check_stocks():
+    while True:
+        for symbol in tickers:
+            try:
+                df = yf.download(symbol, period="1d", interval="5m", progress=False)
+                if df.empty or len(df) < 4:
+                    continue
+
+                current_price = df['Close'][-1]
+                price_15min_ago = df['Close'][-4]
+                price_change_pct = ((current_price - price_15min_ago) / price_15min_ago) * 100
+
+                volume_now = df['Volume'][-1]
+                avg_volume = df['Volume'][-4:-1].mean()
+                volume_ratio = volume_now / avg_volume if avg_volume else 0
+
+                stock_week = yf.Ticker(symbol).history(period="1wk", interval="1d")
+                if stock_week.empty:
+                    continue
+
+                week_low = round(stock_week['Low'].min(), 2)
+                week_high = round(stock_week['High'].max(), 2)
+
+                if (price_change_pct >= 3 or volume_ratio >= 2) and symbol not in sent_alerts:
+                    message = (
+                        f"🚨 تنبيه زخم مفاجئ على {symbol}\n"
+                        f"🔼 السعر الحالي: {round(current_price, 2)}\n"
+                        f"📈 التغير خلال 15 دقيقة: {round(price_change_pct, 2)}٪\n"
+                        f"🔥 نسبة الزخم (فوليوم): {round(volume_ratio, 2)}x\n"
+                        f"📉 أقل سعر أسبوعي: {week_low}\n"
+                        f"📈 أعلى سعر أسبوعي: {week_high}"
+                    )
+                    bot.send_message(CHAT_ID, message)
+                    sent_alerts.add(symbol)
+
+            except Exception as e:
+                print(f"خطأ في {symbol}: {e}")
+
+        time.sleep(60)  # ← التحديث كل دقيقة
+
+threading.Thread(target=check_stocks).start()
