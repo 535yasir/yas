@@ -57,3 +57,18 @@ while True:
             print(f"⚠️ خطأ في {symbol}: {e}")
 
     time.sleep(15)
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is alive!", 200
+
+def run_flask():
+    app.run(host="0.0.0.0", port=5000)
+
+# تشغيل Flask في مسار جانبي
+threading.Thread(target=run_flask).start()
+monitor_market()
