@@ -5,11 +5,12 @@ import requests
 import os
 
 # إعدادات تيليجرام (من متغيرات البيئة)
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+BOT_TOKEN = os.environ.get("8151824172:AAFUxxjqtxk3wt_um-U9FWW7JSQjopSI8hg")  # ضع المتغير الصحيح في Render
+CHAT_ID = os.environ.get("6500755943")
 
-# تحميل قائمة الأسهم من ملف CSV
-tickers = pd.read_csv("tickers.csv")["symbol"].tolist()
+# ✅ تحميل قائمة الأسهم من ملف txt
+with open("all_sp500_stocks.txt", "r") as f:
+    tickers = [line.strip() for line in f.readlines()]
 
 # الحد الأدنى للزخم أو السيولة لإرسال التنبيه
 MIN_VOLUME = 5_000_000
