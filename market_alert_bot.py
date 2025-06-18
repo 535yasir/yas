@@ -11,16 +11,16 @@ CHAT_ID = '6500755943'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# 🔥 رسالة تأكيد بدء التشغيل
+# رسالة تأكيد بدء التشغيل
 bot.send_message(CHAT_ID, "🚀 تم تشغيل البوت بنجاح! جاري مراقبة كامل السوق الأمريكي (~8000 سهم)")
 
-# قراءة جميع الأسهم
+# قراءة الأسهم
 with open('all_us_stocks.txt', 'r') as f:
     tickers = [line.strip() for line in f.readlines()]
 
-# إعداد
-chunk_size = 300  # كم سهم في كل دفعة
-sleep_interval = 10  # كل كم ثانية ينتقل للدفعة التالية
+# إعدادات
+chunk_size = 300  # كل دفعة 300 سهم
+sleep_interval = 10  # كل 10 ثواني بين الدفعات
 top_momentum_interval = 15 * 60  # كل 15 دقيقة
 
 sent_alerts = set()
@@ -76,7 +76,8 @@ def process_chunk(chunk):
                 sent_alerts.add(symbol)
 
         except Exception as e:
-            print(f"خطأ في {symbol}: {e}")
+            print(f"⚠️ Skipping {symbol}: {e}")
+            continue
 
 def momentum_report():
     while True:
@@ -105,6 +106,6 @@ def start_bot():
             process_chunk(chunk)
             time.sleep(sleep_interval)
 
-# تشغيل المراقبة في الخلفية
+# تشغيل البوت في Threads
 threading.Thread(target=start_bot).start()
 threading.Thread(target=momentum_report).start()
