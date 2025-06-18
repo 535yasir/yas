@@ -6,22 +6,22 @@ import pandas as pd
 import datetime
 
 # إعدادات البوت
-TELEGRAM_TOKEN ='8151824172:AAFUxxjqtxk3wt_um-U9FWW7JSQjopSI8hg'
-CHAT_ID = '6500755943'
+TELEGRAM_TOKEN = '8151824172:AAFUxxjqtxk3wt_um-U9FWW7JSQjopSI8hg'
+CHAT_ID =  '6500755943'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 # رسالة تأكيد بدء التشغيل
-bot.send_message(CHAT_ID, "🚀 تم تشغيل البوت بنجاح! جاري مراقبة كامل السوق الأمريكي (~8000 سهم)")
+bot.send_message(CHAT_ID, "🚀 تم تشغيل البوت ✅ — جاري مراقبة السوق (مع After + Pre Market)")
 
-# قراءة الأسهم
+# قراءة قائمة الأسهم
 with open('all_us_stocks.txt', 'r') as f:
     tickers = [line.strip() for line in f.readlines()]
 
 # إعدادات
-chunk_size = 300  # كل دفعة 300 سهم
-sleep_interval = 10  # كل 10 ثواني بين الدفعات
-top_momentum_interval = 15 * 60  # كل 15 دقيقة
+chunk_size = 300
+sleep_interval = 10
+top_momentum_interval = 15 * 60
 
 sent_alerts = set()
 momentum_scores = {}
@@ -29,16 +29,16 @@ momentum_scores = {}
 def process_chunk(chunk):
     for symbol in chunk:
         try:
-            df = yf.download(symbol, period="1d", interval="5m", progress=False)
+            df = yf.download(symbol, period="1d", interval="1m", prepost=True, progress=False)
             if df.empty or len(df) < 4:
                 continue
 
             current_price = df['Close'][-1]
-            price_15min_ago = df['Close'][-4]
+            price_15min_ago = df['Close'][-16]
             price_change_pct = ((current_price - price_15min_ago) / price_15min_ago) * 100
 
             volume_now = df['Volume'][-1]
-            avg_volume = df['Volume'][-4:-1].mean()
+            avg_volume = df['Volume'][-16:-1].mean()
             volume_ratio = volume_now / avg_volume if avg_volume else 0
 
             stock_week = yf.Ticker(symbol).history(period="1wk", interval="1d")
@@ -48,13 +48,11 @@ def process_chunk(chunk):
             week_low = round(stock_week['Low'].min(), 2)
             week_high = round(stock_week['High'].max(), 2)
 
-            # momentum score
             momentum_score = (price_change_pct * volume_ratio)
             momentum_scores[symbol] = momentum_score
 
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # شروط الإرسال
             if (price_change_pct >= 3 or volume_ratio >= 2) and symbol not in sent_alerts:
                 entry_zone = ""
                 if current_price > week_high:
@@ -65,7 +63,7 @@ def process_chunk(chunk):
                 message = (
                     f"🚨 زخم مفاجئ على {symbol}\n"
                     f"🔼 السعر الحالي: {round(current_price, 2)}\n"
-                    f"📈 تغير 15 دقيقة: {round(price_change_pct, 2)}٪\n"
+                    f"📈 تغير آخر 15 دقيقة: {round(price_change_pct, 2)}٪\n"
                     f"🔥 نسبة الزخم: {round(volume_ratio, 2)}x\n"
                     f"📉 أقل سعر أسبوعي: {week_low}\n"
                     f"📈 أعلى سعر أسبوعي: {week_high}\n"
@@ -106,6 +104,6 @@ def start_bot():
             process_chunk(chunk)
             time.sleep(sleep_interval)
 
-# تشغيل البوت في Threads
+# تشغيل البوت
 threading.Thread(target=start_bot).start()
 threading.Thread(target=momentum_report).start()
