@@ -5,8 +5,8 @@ import threading
 import pandas as pd
 
 # إعدادات البوت
-TELEGRAM_TOKEN = 'ضع_التوكن_هنا'  # من @BotFather
-CHAT_ID = 'ضع_معرف_الدردشة_هنا'    # من @userinfobot أو قناة تيليجرام
+TELEGRAM_TOKEN ='8151824172:AAFUxxjqtxk3wt_um-U9FWW7JSQjopSI8hg'
+CHAT_ID ='6500755943'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
