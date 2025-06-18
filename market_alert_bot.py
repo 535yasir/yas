@@ -3,75 +3,108 @@ import telebot
 import time
 import threading
 import pandas as pd
+import datetime
 
 # إعدادات البوت
 TELEGRAM_TOKEN ='8151824172:AAFUxxjqtxk3wt_um-U9FWW7JSQjopSI8hg'
-CHAT_ID ='6500755943'
+CHAT_ID = '6500755943'
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 # 🔥 رسالة تأكيد بدء التشغيل
-bot.send_message(CHAT_ID, "🚀 تم تشغيل البوت بنجاح! يتم الآن مراقبة السوق الأمريكي.")
+bot.send_message(CHAT_ID, "🚀 تم تشغيل البوت بنجاح! جاري مراقبة كامل السوق الأمريكي (~8000 سهم)")
 
-# قائمة الأسهم
-tickers = [
-    "AAPL", "MSFT", "AMZN", "GOOGL", "META", "NVDA", "TSLA", "PEP", "ADBE", "COST",
-    "CSCO", "AVGO", "TXN", "INTC", "QCOM", "AMGN", "HON", "SBUX", "AMD", "ISRG",
-    "BKNG", "MDLZ", "ADI", "GILD", "REGN", "VRTX", "ZM", "KDP", "ROST", "MNST",
-    "CDNS", "MAR", "FTNT", "CTSH", "WDAY", "EXC", "BIIB", "PCAR", "CHTR", "DLTR",
-    "PAYX", "XEL", "EBAY", "ANSS", "LRCX", "MCHP", "TEAM", "ORLY", "KLAC", "FAST",
-    "BRK.B", "JNJ", "V", "JPM", "UNH", "MA", "HD", "PG", "XOM", "LLY", "ABBV", "BAC",
-    "MRK", "PFE", "KO", "TMO", "CVX", "ABT", "WMT", "DIS", "NFLX", "CRM", "T", "BA",
-    "NKE", "GE", "INTU", "DHR", "LOW", "MDT", "AMAT", "GS", "NOW", "NEE", "PLD",
-    "ADP", "AXP", "SPGI", "TJX", "BLK", "EL", "USB", "ZTS", "SO", "PGR", "MO",
-    "F", "GM", "C", "COF", "MS", "ETN", "ADSK", "MRNA", "SHOP", "SNOW", "PLTR",
-    "UBER", "LYFT", "RIVN", "LCID", "BIDU", "BABA", "JD", "NTES", "PDD", "TCEHY",
-    "DOCU", "ROKU", "SPOT", "TWLO", "SQ", "AFRM", "DKNG", "PINS", "TTD", "ETSY",
-    "ASML", "TSM", "NVAX", "COIN", "HOOD", "CRWD", "ZS", "NET", "PANW", "DDOG",
-    "OKTA", "FSLY", "FUBO", "SOFI", "WBD", "PARA"
-]
+# قراءة جميع الأسهم
+with open('all_us_stocks.txt', 'r') as f:
+    tickers = [line.strip() for line in f.readlines()]
+
+# إعداد
+chunk_size = 300  # كم سهم في كل دفعة
+sleep_interval = 10  # كل كم ثانية ينتقل للدفعة التالية
+top_momentum_interval = 15 * 60  # كل 15 دقيقة
 
 sent_alerts = set()
+momentum_scores = {}
 
-def check_stocks():
+def process_chunk(chunk):
+    for symbol in chunk:
+        try:
+            df = yf.download(symbol, period="1d", interval="5m", progress=False)
+            if df.empty or len(df) < 4:
+                continue
+
+            current_price = df['Close'][-1]
+            price_15min_ago = df['Close'][-4]
+            price_change_pct = ((current_price - price_15min_ago) / price_15min_ago) * 100
+
+            volume_now = df['Volume'][-1]
+            avg_volume = df['Volume'][-4:-1].mean()
+            volume_ratio = volume_now / avg_volume if avg_volume else 0
+
+            stock_week = yf.Ticker(symbol).history(period="1wk", interval="1d")
+            if stock_week.empty:
+                continue
+
+            week_low = round(stock_week['Low'].min(), 2)
+            week_high = round(stock_week['High'].max(), 2)
+
+            # momentum score
+            momentum_score = (price_change_pct * volume_ratio)
+            momentum_scores[symbol] = momentum_score
+
+            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # شروط الإرسال
+            if (price_change_pct >= 3 or volume_ratio >= 2) and symbol not in sent_alerts:
+                entry_zone = ""
+                if current_price > week_high:
+                    entry_zone = "🚀 كسر القمة — فرصة دخول"
+                elif current_price < week_low:
+                    entry_zone = "🔻 كسر القاع — فرصة دخول"
+
+                message = (
+                    f"🚨 زخم مفاجئ على {symbol}\n"
+                    f"🔼 السعر الحالي: {round(current_price, 2)}\n"
+                    f"📈 تغير 15 دقيقة: {round(price_change_pct, 2)}٪\n"
+                    f"🔥 نسبة الزخم: {round(volume_ratio, 2)}x\n"
+                    f"📉 أقل سعر أسبوعي: {week_low}\n"
+                    f"📈 أعلى سعر أسبوعي: {week_high}\n"
+                    f"{entry_zone}\n"
+                    f"⏰ {now}"
+                )
+                bot.send_message(CHAT_ID, message)
+                sent_alerts.add(symbol)
+
+        except Exception as e:
+            print(f"خطأ في {symbol}: {e}")
+
+def momentum_report():
     while True:
-        for symbol in tickers:
-            try:
-                df = yf.download(symbol, period="1d", interval="5m", progress=False)
-                if df.empty or len(df) < 4:
-                    continue
+        time.sleep(top_momentum_interval)
+        if not momentum_scores:
+            continue
 
-                current_price = df['Close'][-1]
-                price_15min_ago = df['Close'][-4]
-                price_change_pct = ((current_price - price_15min_ago) / price_15min_ago) * 100
+        top_10 = sorted(momentum_scores.items(), key=lambda x: x[1], reverse=True)[:10]
 
-                volume_now = df['Volume'][-1]
-                avg_volume = df['Volume'][-4:-1].mean()
-                volume_ratio = volume_now / avg_volume if avg_volume else 0
+        report = "🔥 Top 10 Momentum Stocks 🔥\n"
+        for i, (symbol, score) in enumerate(top_10, 1):
+            report += f"{i}. {symbol} — Momentum Score: {round(score, 2)}\n"
 
-                stock_week = yf.Ticker(symbol).history(period="1wk", interval="1d")
-                if stock_week.empty:
-                    continue
+        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        report += f"\n⏰ {now}"
 
-                week_low = round(stock_week['Low'].min(), 2)
-                week_high = round(stock_week['High'].max(), 2)
+        bot.send_message(CHAT_ID, report)
 
-                if (price_change_pct >= 3 or volume_ratio >= 2) and symbol not in sent_alerts:
-                    message = (
-                        f"🚨 تنبيه زخم مفاجئ على {symbol}\n"
-                        f"🔼 السعر الحالي: {round(current_price, 2)}\n"
-                        f"📈 التغير خلال 15 دقيقة: {round(price_change_pct, 2)}٪\n"
-                        f"🔥 نسبة الزخم (فوليوم): {round(volume_ratio, 2)}x\n"
-                        f"📉 أقل سعر أسبوعي: {week_low}\n"
-                        f"📈 أعلى سعر أسبوعي: {week_high}"
-                    )
-                    bot.send_message(CHAT_ID, message)
-                    sent_alerts.add(symbol)
-
-            except Exception as e:
-                print(f"خطأ في {symbol}: {e}")
-
-        time.sleep(60)  # تحديث كل دقيقة
+def start_bot():
+    total_chunks = len(tickers) // chunk_size + 1
+    while True:
+        for i in range(total_chunks):
+            start_idx = i * chunk_size
+            end_idx = start_idx + chunk_size
+            chunk = tickers[start_idx:end_idx]
+            process_chunk(chunk)
+            time.sleep(sleep_interval)
 
 # تشغيل المراقبة في الخلفية
-threading.Thread(target=check_stocks).start()
+threading.Thread(target=start_bot).start()
+threading.Thread(target=momentum_report).start()
