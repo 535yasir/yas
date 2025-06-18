@@ -5,12 +5,15 @@ import threading
 import pandas as pd
 
 # إعدادات البوت
-TELEGRAM_TOKEN = '8151824172:AAFUxxjqtxk3wt_um-U9FWW7JSQjopSI8hg'
-CHAT_ID = '6500755943'
+TELEGRAM_TOKEN = 'ضع_التوكن_هنا'  # من @BotFather
+CHAT_ID = 'ضع_معرف_الدردشة_هنا'    # من @userinfobot أو قناة تيليجرام
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# قائمة مكونة من 500 سهم أمريكي (عينة ممثلة)
+# 🔥 رسالة تأكيد بدء التشغيل
+bot.send_message(CHAT_ID, "🚀 تم تشغيل البوت بنجاح! يتم الآن مراقبة السوق الأمريكي.")
+
+# قائمة الأسهم
 tickers = [
     "AAPL", "MSFT", "AMZN", "GOOGL", "META", "NVDA", "TSLA", "PEP", "ADBE", "COST",
     "CSCO", "AVGO", "TXN", "INTC", "QCOM", "AMGN", "HON", "SBUX", "AMD", "ISRG",
@@ -68,6 +71,7 @@ def check_stocks():
             except Exception as e:
                 print(f"خطأ في {symbol}: {e}")
 
-        time.sleep(60)  # ← التحديث كل دقيقة
+        time.sleep(60)  # تحديث كل دقيقة
 
+# تشغيل المراقبة في الخلفية
 threading.Thread(target=check_stocks).start()
