@@ -27,6 +27,5 @@ def download_clean_symbols():
 
     print("✅ Saved to all_us_stocks.txt")
 
-# Run it
 if __name__ == "__main__":
     download_clean_symbols()
